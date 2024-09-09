@@ -1,0 +1,87 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+
+// Define ultrasonic sensor pins
+#define trigPin D1
+#define echoPin D2
+
+// Wi-Fi credentials
+const char* ssid = "Your_SSID";
+const char* password = "Your_PASSWORD";
+
+// Server URL where data is sent
+const char* serverUrl = "http://yourserver.com/api/waste-data";
+
+// Threshold in cm to trigger the alert
+const int wasteFullThreshold = 20;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  
+  // Connect to Wi-Fi
+  connectToWiFi();
+}
+
+void loop() {
+  int distance = getDistance();
+  Serial.print("Waste level: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+
+  if (distance < wasteFullThreshold) {
+    sendDataToServer(distance);
+  }
+
+  delay(60000); // Check every 60 seconds
+}
+
+// Function to measure distance using ultrasonic sensor
+int getDistance() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH);
+  int distance = duration * 0.034 / 2;
+  return distance;
+}
+
+// Function to send waste data to server
+void sendDataToServer(int distance) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    // JSON data
+    String jsonPayload = "{\"bin_id\": 1, \"waste_level\": " + String(distance) + "}";
+
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("Data sent: " + response);
+    } else {
+      Serial.println("Error sending data");
+    }
+
+    http.end();
+  } else {
+    Serial.println("Wi-Fi disconnected");
+    connectToWiFi();
+  }
+}
+
+// Function to connect to Wi-Fi
+void connectToWiFi() {
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to Wi-Fi...");
+  }
+  Serial.println("Connected to Wi-Fi");
+}
